@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:renewtrack/services/authProvider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/common_widgets.dart';
 
@@ -14,7 +15,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   bool _obscurePass = true;
-  bool _loading = false;
 
   @override
   void dispose() {
@@ -23,34 +23,51 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // ── Sign-in handler ──────────────────────────
   Future<void> _signIn() async {
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
-    setState(() => _loading = true);
-    // Simulate network delay
-    await Future.delayed(const Duration(seconds: 1));
+
+    final auth = AuthScope.of(context);
+
+    final success = await auth.login(
+      email: _emailCtrl.text.trim(),
+      password: _passCtrl.text,
+    );
+
     if (!mounted) return;
-    setState(() => _loading = false);
-    Navigator.of(context).pushReplacementNamed('/dashboard');
+
+    if (success) {
+      Navigator.of(context).pushReplacementNamed('/dashboard');
+    }
+    // On failure, AuthProvider.error is set → _ErrorBanner renders automatically
   }
 
   @override
   Widget build(BuildContext context) {
+    // Rebuild whenever AuthProvider notifies (loading / error changes)
+    final auth = AuthScope.of(context);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
         children: [
-          // ── Purple header ──────────────────────────
-          _Header(),
-          // ── Form card ─────────────────────────────
+          // ── Purple header ────────────────────────
+          const _Header(),
+
+          // ── Scrollable form ──────────────────────
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.xl, vertical: AppSpacing.xxl),
+                horizontal: AppSpacing.xl,
+                vertical: AppSpacing.xxl,
+              ),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Heading
                     Text(
                       'Welcome back!',
                       style: Theme.of(context).textTheme.titleLarge,
@@ -59,28 +76,42 @@ class _LoginScreenState extends State<LoginScreen> {
                     const Text(
                       'Sign in to continue managing your renewals.',
                       style: TextStyle(
-                          fontSize: AppTextSize.sm,
-                          color: AppColors.textSecondary),
+                        fontSize: AppTextSize.sm,
+                        color: AppColors.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xxxl),
 
-                    // Email
+                    // ── API error banner ──────────────
+                    if (auth.error != null)
+                      _ErrorBanner(
+                        message: auth.error!,
+                        onDismiss: auth.clearError,
+                      ),
+
+                    // ── Email ─────────────────────────
                     CustomTextField(
                       label: 'Email address',
                       hint: 'you@example.com',
                       controller: _emailCtrl,
                       keyboardType: TextInputType.emailAddress,
-                      prefixIcon:
-                          const Icon(Icons.email_outlined, size: 20),
+                      prefixIcon: const Icon(Icons.email_outlined, size: 20),
+                      onChanged: (_) {
+                        if (auth.error != null) auth.clearError();
+                      },
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Enter your email';
-                        if (!v.contains('@')) return 'Enter a valid email';
+                        if (v == null || v.isEmpty) {
+                          return 'Enter your email';
+                        }
+                        if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(v)) {
+                          return 'Enter a valid email address';
+                        }
                         return null;
                       },
                     ),
                     const SizedBox(height: AppSpacing.lg),
 
-                    // Password
+                    // ── Password ──────────────────────
                     CustomTextField(
                       label: 'Password',
                       controller: _passCtrl,
@@ -97,100 +128,31 @@ class _LoginScreenState extends State<LoginScreen> {
                         onPressed: () =>
                             setState(() => _obscurePass = !_obscurePass),
                       ),
+                      onChanged: (_) {
+                        if (auth.error != null) auth.clearError();
+                      },
                       validator: (v) {
-                        if (v == null || v.isEmpty) return 'Enter your password';
-                        if (v.length < 6) return 'Min. 6 characters';
+                        if (v == null || v.isEmpty) {
+                          return 'Enter your password';
+                        }
+                        if (v.length < 6) {
+                          return 'Password must be at least 6 characters';
+                        }
                         return null;
                       },
                     ),
                     const SizedBox(height: AppSpacing.sm),
 
-                    // Forgot password
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {},
-                        style: TextButton.styleFrom(
-                            padding: EdgeInsets.zero,
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-                        child: const Text(
-                          'Forgot password?',
-                          style: TextStyle(
-                              fontSize: AppTextSize.sm,
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ),
+                    // ── Forgot password ───────────────
                     const SizedBox(height: AppSpacing.xl),
 
-                    // Sign in button
+                    // ── Sign in button ────────────────
                     PrimaryButton(
                       label: 'Sign in',
-                      onPressed: _signIn,
-                      isLoading: _loading,
+                      onPressed: auth.loading ? null : _signIn,
+                      isLoading: auth.loading,
                     ),
                     const SizedBox(height: AppSpacing.xl),
-
-                    // Divider with "or"
-                    Row(
-                      children: [
-                        const Expanded(
-                            child: Divider(color: AppColors.divider)),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: AppSpacing.md),
-                          child: Text(
-                            'or',
-                            style: TextStyle(
-                                fontSize: AppTextSize.sm,
-                                color: AppColors.textSecondary
-                                    .withOpacity(0.7)),
-                          ),
-                        ),
-                        const Expanded(
-                            child: Divider(color: AppColors.divider)),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-
-                    // Google sign-in button
-                    OutlinedButton(
-                      onPressed: _signIn,
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          _GoogleIcon(),
-                          const SizedBox(width: AppSpacing.md),
-                          const Text('Continue with Google'),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.xxxl),
-
-                    // Sign up link
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          "Don't have an account? ",
-                          style: TextStyle(
-                              fontSize: AppTextSize.sm,
-                              color: AppColors.textSecondary),
-                        ),
-                        GestureDetector(
-                          onTap: () {},
-                          child: const Text(
-                            'Sign up',
-                            style: TextStyle(
-                                fontSize: AppTextSize.sm,
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w700),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),
@@ -202,8 +164,69 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
-// ── Header widget ──────────────────────────────────
+// ─────────────────────────────────────────────────
+// Error banner
+// ─────────────────────────────────────────────────
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+  final VoidCallback onDismiss;
+
+  const _ErrorBanner({required this.message, required this.onDismiss});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xl),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.expired,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: Border.all(
+          color: AppColors.expiredText.withOpacity(0.3),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: AppColors.expiredText,
+            size: 18,
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                fontSize: AppTextSize.sm,
+                color: AppColors.expiredText,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: onDismiss,
+            child: const Icon(
+              Icons.close_rounded,
+              color: AppColors.expiredText,
+              size: 16,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────
+// Header
+// ─────────────────────────────────────────────────
 class _Header extends StatelessWidget {
+  const _Header();
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -227,7 +250,6 @@ class _Header extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // App logo
           Container(
             height: 64,
             width: 64,
@@ -235,26 +257,33 @@ class _Header extends StatelessWidget {
               color: Colors.white.withOpacity(0.15),
               borderRadius: BorderRadius.circular(AppRadius.lg),
               border: Border.all(
-                  color: Colors.white.withOpacity(0.3), width: 1.5),
+                color: Colors.white.withOpacity(0.3),
+                width: 1.5,
+              ),
             ),
-            child: const Icon(Icons.autorenew_rounded,
-                color: Colors.white, size: 34),
+            child: const Icon(
+              Icons.autorenew_rounded,
+              color: Colors.white,
+              size: 34,
+            ),
           ),
           const SizedBox(height: AppSpacing.md),
           const Text(
             'RenewTrack',
             style: TextStyle(
-                fontSize: AppTextSize.xxl,
-                fontWeight: FontWeight.w800,
-                color: Colors.white,
-                letterSpacing: 0.5),
+              fontSize: AppTextSize.xxl,
+              fontWeight: FontWeight.w800,
+              color: Colors.white,
+              letterSpacing: 0.5,
+            ),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Manage all your client renewals',
             style: TextStyle(
-                fontSize: AppTextSize.sm,
-                color: Colors.white.withOpacity(0.8)),
+              fontSize: AppTextSize.sm,
+              color: Colors.white.withOpacity(0.8),
+            ),
           ),
         ],
       ),
@@ -262,7 +291,9 @@ class _Header extends StatelessWidget {
   }
 }
 
-// ── Inline Google "G" icon ─────────────────────────
+// ─────────────────────────────────────────────────
+// Google icon
+// ─────────────────────────────────────────────────
 class _GoogleIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -277,9 +308,10 @@ class _GoogleIcon extends StatelessWidget {
         child: Text(
           'G',
           style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 13,
-              color: Color(0xFF4285F4)),
+            fontWeight: FontWeight.w800,
+            fontSize: 13,
+            color: Color(0xFF4285F4),
+          ),
         ),
       ),
     );

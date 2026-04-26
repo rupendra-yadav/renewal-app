@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:renewtrack/services/authProvider.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/add_renewal_screen.dart';
@@ -22,17 +23,21 @@ class RenewTrackApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'RenewTrack',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
-      initialRoute: '/login',
-      routes: {
-        '/login': (_) => const LoginScreen(),
-        '/dashboard': (_) => const MainShell(initialIndex: 0),
-        '/renewals': (_) => const MainShell(initialIndex: 1),
-        '/add-renewal': (_) => const AddRenewalScreen(),
-      },
+    // AuthScope wraps the entire tree so every screen can access AuthProvider
+    return AuthScope(
+      notifier: AuthProvider(),
+      child: MaterialApp(
+        title: 'RenewTrack',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.lightTheme,
+        initialRoute: '/login',
+        routes: {
+          '/login': (_) => const LoginScreen(),
+          '/dashboard': (_) => const MainShell(initialIndex: 0),
+          '/renewals': (_) => const MainShell(initialIndex: 1),
+          '/add-renewal': (_) => const AddRenewalScreen(),
+        },
+      ),
     );
   }
 }
